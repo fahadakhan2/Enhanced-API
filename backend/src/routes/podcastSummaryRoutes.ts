@@ -1,20 +1,20 @@
 import express, { Request, Response, Router } from 'express';
 import { PodcastSummary } from '../types/PodcastSummary';
-import OpenAI from "openai";
+import OpenAI from 'openai';
 import dotenv from 'dotenv';
 dotenv.config();
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
 const router: Router = express.Router();
 
 let podcastSummaries: PodcastSummary[] = [
-    {
-      id: 1,
-      title: 'Introduction to Physics',
-      textContent: `
+  {
+    id: 1,
+    title: 'Introduction to Physics',
+    textContent: `
   Physics is a branch of science concerned with the nature and properties of matter and energy. The subject matter of physics includes mechanics, heat, light and other radiation, sound, electricity, magnetism, and the structure of atoms. In the classical sense, Newtonian mechanics describes the motion of macroscopic objects and remains a foundation for most engineering applications. 
   
   Students begin by learning about motion—how objects move through space and time, including concepts like velocity, acceleration, and force. Newton's three laws of motion form a central framework. The first law, often called the law of inertia, states that an object will remain at rest or in uniform motion unless acted upon by a force. The second law quantifies force as the product of mass and acceleration (F = ma), and the third law states that every action has an equal and opposite reaction.
@@ -25,11 +25,11 @@ let podcastSummaries: PodcastSummary[] = [
   
   Physics encourages problem-solving and mathematical modeling. It’s also a gateway to more advanced concepts such as quantum mechanics and relativity, which explain behaviors at very small and very fast scales. Understanding physics is critical in fields from engineering and computer science to medicine and space exploration.
       `,
-    },
-    {
-      id: 2,
-      title: 'Advanced Mathematics',
-      textContent: `
+  },
+  {
+    id: 2,
+    title: 'Advanced Mathematics',
+    textContent: `
   This collection of notes covers key concepts in higher mathematics, typically encountered in undergraduate studies. It starts with **calculus**, where students learn about the behavior of functions, derivatives, and integrals. Derivatives describe how a function changes at any point and are crucial for understanding motion, optimization problems, and dynamic systems. Integrals, conversely, represent the accumulation of quantities and are widely used in area, volume, and total change calculations.
   
   **Linear algebra** introduces vectors, matrices, and linear transformations. It's foundational for computer graphics, data science, and systems of equations. Key concepts include eigenvalues and eigenvectors, which help us understand how systems behave under repeated operations.
@@ -42,11 +42,11 @@ let podcastSummaries: PodcastSummary[] = [
   
   Mathematics is not only abstract but also highly practical, providing tools to model and solve real-world problems.
       `,
-    },
-    {
-      id: 3,
-      title: 'History Overview',
-      textContent: `
+  },
+  {
+    id: 3,
+    title: 'History Overview',
+    textContent: `
   This historical overview traces major events from the 18th century to the 20th century, helping students understand the shaping forces behind our modern world. It begins with the **Industrial Revolution**, a period of technological innovation in the late 1700s that transformed economies from agrarian to industrial. This revolution began in Britain and spread globally, introducing machines like the steam engine, mechanized textile production, and railroads, fundamentally changing labor systems and urbanization patterns.
   
   The **French Revolution** (1789) marked a major political shift, emphasizing republicanism, human rights, and the fight against absolute monarchy. Its outcomes influenced movements across Europe and laid the groundwork for modern democracy and nationalism.
@@ -61,9 +61,8 @@ let podcastSummaries: PodcastSummary[] = [
   
   Studying history offers insight into power dynamics, cultural shifts, and the causes and consequences of conflict—essential for understanding the present.
       `,
-    },
-  ];
-  
+  },
+];
 
 // GET - Retrieve all podcasts
 router.get('/', (req: Request, res: Response): void => {
@@ -105,5 +104,45 @@ router.delete('/:id', (req: Request, res: Response): void => {
 
   res.json({ message: 'Podcast deleted', podcastSummaries });
 });
+
+router.post(
+  '/summary/:id',
+  async (req: Request, res: Response): Promise<void> => {
+    const id = parseInt(req.params.id);
+    const podcast = podcastSummaries.find((p) => p.id === id);
+
+    if (!podcast) {
+      res.status(404).json({ error: 'Podcast not found' });
+      return;
+    }
+
+    try {
+      const prompt = `Summarize the following educational text in a concise and student-friendly manner with no opening or closing remarks:\n\n"${podcast.textContent}"`;
+
+      const chatCompletion = await openai.chat.completions.create({
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are a helpful assistant that summarizes educational content.',
+          },
+          { role: 'user', content: prompt },
+        ],
+        model: 'gpt-3.5-turbo',
+        temperature: 0.7,
+      });
+
+      const summary =
+        chatCompletion.choices[0]?.message?.content?.trim() ??
+        'No summary available.';
+      podcast.summary = summary;
+
+      res.json({ message: 'Summary generated', podcast });
+    } catch (error) {
+      console.error('OpenAI error:', error);
+      res.status(500).json({ error: 'Failed to generate summary' });
+    }
+  }
+);
 
 export default router;
